@@ -983,17 +983,22 @@ namespace WeatherToolbar
 
                 string tempText = Math.Round(current.temperature_2m).ToString() + "°C";
                 string feels = current.apparent_temperature.HasValue ? ($" (pocitově {Math.Round(current.apparent_temperature.Value)}°C)") : string.Empty;
-                string windStr = string.Empty;
+                string weatherLine = WeatherService.Describe(current.weather_code);
+                string windLine = null;
                 if (current.wind_speed_10m.HasValue || current.wind_direction_10m.HasValue)
                 {
                     string dir = current.wind_direction_10m.HasValue ? ToCardinal(current.wind_direction_10m.Value) : "--";
                     string spd = current.wind_speed_10m.HasValue ? Math.Round(current.wind_speed_10m.Value, 1).ToString("0.0") : "--";
-                    windStr = $" | Vítr {spd} m/s {dir}";
+                    windLine = $"Vítr {spd} m/s {dir}";
                 }
                 string place = _place ?? string.Empty;
-                string tooltip = string.IsNullOrWhiteSpace(place) ?
-                    $"{tempText}{feels} • {WeatherService.Describe(current.weather_code)}{windStr}" :
-                    $"{tempText}{feels} • {WeatherService.Describe(current.weather_code)}{windStr} — {place}";
+                // Build multi-line tooltip: each info on its own line
+                var lines = new System.Collections.Generic.List<string>();
+                lines.Add(tempText + feels);
+                if (!string.IsNullOrWhiteSpace(weatherLine)) lines.Add(weatherLine);
+                if (!string.IsNullOrWhiteSpace(windLine)) lines.Add(windLine);
+                if (!string.IsNullOrWhiteSpace(place)) lines.Add(place);
+                string tooltip = string.Join(Environment.NewLine, lines);
                 _notifyIcon.Text = tooltip.Length > 63 ? tooltip.Substring(0, 63) : tooltip;
 
                 var icon = RenderIcon((int)Math.Round(current.temperature_2m), current.weather_code);
