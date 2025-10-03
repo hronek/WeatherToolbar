@@ -39,7 +39,7 @@ namespace WeatherToolbar.Services
                 web.CoreWebView2.Settings.IsZoomControlEnabled = false;
                 web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                 web.CoreWebView2.Settings.AreDefaultScriptDialogsEnabled = false;
-                // Allow geolocation (site may use it, but we will also force our coords below)
+                // Deny geolocation to prevent site from overriding to default location
                 try
                 {
                     web.CoreWebView2.PermissionRequested += (s, e) =>
@@ -48,7 +48,7 @@ namespace WeatherToolbar.Services
                         {
                             if (e.PermissionKind == CoreWebView2PermissionKind.Geolocation)
                             {
-                                e.State = CoreWebView2PermissionState.Allow;
+                                e.State = CoreWebView2PermissionState.Deny;
                                 e.Handled = true;
                             }
                         }
@@ -120,9 +120,10 @@ namespace WeatherToolbar.Services
                 } catch { }
 
                 // Navigate to meteograms URL
-                string latStr = lat.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                string lonStr = lon.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                string latStr = lat.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
+                string lonStr = lon.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
                 string url = $"https://meteograms.com/#/{latStr},{lonStr},12/128/";
+                string targetHash = $"#/{latStr},{lonStr},12/128/";
                 try {
                     if (WeatherToolbar.Services.ConfigService.IsLoggingEnabled()) {
                         string dir = WeatherToolbar.Services.ConfigService.ConfigDir; System.IO.Directory.CreateDirectory(dir);
@@ -149,38 +150,120 @@ namespace WeatherToolbar.Services
                         var completed = await Task.WhenAny(tcsNav.Task, Task.Delay(8000));
                     }
 
+                    // Enforce and wait for the target hash to stick (avoid fallback to London)
+                    try
+                    {
+                        int stable = 0;
+                        for (int i = 0; i < 50 && stable < 3; i++) // up to ~20s
+                        {
+                            string hJson = await web.CoreWebView2.ExecuteScriptAsync("(function(){return window.location.hash||'';})()");
+                            string h = string.Empty; try { h = System.Text.Json.JsonSerializer.Deserialize<string>(hJson) ?? string.Empty; } catch { }
+                            if (!string.Equals(h, targetHash, StringComparison.Ordinal))
+                            {
+                                // Set desired hash and dispatch event
+                                string js = $"(function(){{try{{ if (window.location.hash!=='{targetHash}') window.location.hash='{targetHash}'; try{{ window.dispatchEvent(new HashChangeEvent('hashchange')); }}catch(e){{}} }}catch(_ ){{}} }})();";
+                                await web.CoreWebView2.ExecuteScriptAsync(js);
+                                stable = 0;
+                            }
+                            else
+                            {
+                                stable++;
+                            }
+                            await Task.Delay(400);
+                        }
+                    }
+                    catch { }
+
                     // Fast-path: try to grab meteogram image directly within ~6s total
                     try
                     {
                         bool savedFast = false;
-                        for (int i = 0; i < 20 && !savedFast; i++) // 20 * 300ms = ~6s
+                        for (int i = 0; i < 30 && !savedFast; i++) // up to ~9s
                         {
+                            // Only proceed if current hash matches our target
+                            try
+                            {
+                                string hJson2 = await web.CoreWebView2.ExecuteScriptAsync("(function(){return window.location.hash||'';})()");
+                                string h2 = string.Empty; try { h2 = System.Text.Json.JsonSerializer.Deserialize<string>(hJson2) ?? string.Empty; } catch { }
+                                if (!string.Equals(h2, targetHash, StringComparison.Ordinal))
+                                {
+                                    // Try to enforce again and continue waiting
+                                    string js = $"(function(){{try{{ if (window.location.hash!=='{targetHash}') window.location.hash='{targetHash}'; try{{ window.dispatchEvent(new HashChangeEvent('hashchange')); }}catch(e){{}} }}catch(_ ){{}} }})();";
+                                    await web.CoreWebView2.ExecuteScriptAsync(js);
+                                    await Task.Delay(400);
+                                    continue;
+                                }
+                            }
+                            catch { }
                             var imgSrcJson = await web.CoreWebView2.ExecuteScriptAsync("(function(){var img=document.querySelector('#meteogram img'); return img? img.src : ''; })();");
                             string imgSrc = string.Empty;
                             try { imgSrc = System.Text.Json.JsonSerializer.Deserialize<string>(imgSrcJson) ?? string.Empty; } catch { imgSrc = string.Empty; }
                             if (!string.IsNullOrWhiteSpace(imgSrc) && (imgSrc.StartsWith("http://") || imgSrc.StartsWith("https://")))
                             {
+                                // Validate that IMG corresponds to our coords (if nodeserver URL with encoded JSON)
+                                bool coordsMatch = true;
                                 try
                                 {
-                                    using var http = new System.Net.Http.HttpClient();
-                                    var bytes = await http.GetByteArrayAsync(imgSrc);
-                                    await System.IO.File.WriteAllBytesAsync(outPath, bytes);
-                                    savedFast = bytes != null && bytes.Length > 0;
-                                    if (savedFast)
+                                    int idx = imgSrc.IndexOf("/getMeteogram/");
+                                    if (idx > 0)
                                     {
-                                        try
+                                        string enc = imgSrc.Substring(idx + "/getMeteogram/".Length);
+                                        string json = Uri.UnescapeDataString(enc);
+                                        using var doc = System.Text.Json.JsonDocument.Parse(json);
+                                        var root = doc.RootElement;
+                                        double? jLat = null, jLon = null;
+                                        if (root.TryGetProperty("latitude", out var latEl))
                                         {
-                                            if (WeatherToolbar.Services.ConfigService.IsLoggingEnabled()) {
-                                                string dir = WeatherToolbar.Services.ConfigService.ConfigDir; System.IO.Directory.CreateDirectory(dir);
-                                                System.IO.File.AppendAllText(System.IO.Path.Combine(dir, "app.log"), DateTime.Now.ToString("s") + $": Meteogram saved via direct image (fast-path); url={imgSrc}\n");
+                                            // latitude may be string
+                                            if (latEl.ValueKind == System.Text.Json.JsonValueKind.String)
+                                            {
+                                                if (double.TryParse(latEl.GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d)) jLat = d;
                                             }
+                                            else if (latEl.ValueKind == System.Text.Json.JsonValueKind.Number && latEl.TryGetDouble(out var d2)) jLat = d2;
                                         }
-                                        catch { }
-                                        form.Close();
-                                        return; // done quickly
+                                        if (root.TryGetProperty("longitude", out var lonEl))
+                                        {
+                                            if (lonEl.ValueKind == System.Text.Json.JsonValueKind.String)
+                                            {
+                                                if (double.TryParse(lonEl.GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d)) jLon = d;
+                                            }
+                                            else if (lonEl.ValueKind == System.Text.Json.JsonValueKind.Number && lonEl.TryGetDouble(out var d2)) jLon = d2;
+                                        }
+                                        if (jLat.HasValue && jLon.HasValue)
+                                        {
+                                            double tLat = double.Parse(latStr, System.Globalization.CultureInfo.InvariantCulture);
+                                            double tLon = double.Parse(lonStr, System.Globalization.CultureInfo.InvariantCulture);
+                                            double diff = Math.Max(Math.Abs(jLat.Value - tLat), Math.Abs(jLon.Value - tLon));
+                                            coordsMatch = diff <= 0.001; // ~4.1 arcsec tolerance
+                                        }
                                     }
                                 }
-                                catch { }
+                                catch { coordsMatch = false; }
+
+                                if (coordsMatch)
+                                {
+                                    try
+                                    {
+                                        using var http = new System.Net.Http.HttpClient();
+                                        var bytes = await http.GetByteArrayAsync(imgSrc);
+                                        await System.IO.File.WriteAllBytesAsync(outPath, bytes);
+                                        savedFast = bytes != null && bytes.Length > 0;
+                                        if (savedFast)
+                                        {
+                                            try
+                                            {
+                                                if (WeatherToolbar.Services.ConfigService.IsLoggingEnabled()) {
+                                                    string dir = WeatherToolbar.Services.ConfigService.ConfigDir; System.IO.Directory.CreateDirectory(dir);
+                                                    System.IO.File.AppendAllText(System.IO.Path.Combine(dir, "app.log"), DateTime.Now.ToString("s") + $": Meteogram saved via direct image (fast-path); url={imgSrc}\n");
+                                                }
+                                            }
+                                            catch { }
+                                            form.Close();
+                                            return; // done quickly
+                                        }
+                                    }
+                                    catch { }
+                                }
                             }
                             await Task.Delay(300);
                         }
@@ -228,11 +311,11 @@ namespace WeatherToolbar.Services
                             try{ document.cookie = 'cookieconsent_status=allow; path=/; max-age=' + (3600*24*365); }catch(e){}
                             // Force-set location from desired lat/lon (parsed from current hash)
                             try{
-                              var h = window.location.hash || ''; 
+                              var h = window.location.hash || '';
                               var m = h.match(/#\/(.*?),(.*?),/);
                               if (m && m[1] && m[2]){
                                 var lat = parseFloat(m[1]); var lon = parseFloat(m[2]);
-                                var newHash = '#/' + lat.toFixed(6) + ',' + lon.toFixed(6) + ',12/96/';
+                                var newHash = '#/' + lat.toFixed(4) + ',' + lon.toFixed(4) + ',12/128/';
                                 if (window.location.hash !== newHash){ window.location.hash = newHash; }
                                 try{ window.dispatchEvent(new HashChangeEvent('hashchange')); }catch(e){}
                                 try{ var map = window.map || window.MAP || window.leafletMap; if (map && map.setView) map.setView([lat,lon], map.getZoom()); }catch(e){}
@@ -278,7 +361,24 @@ namespace WeatherToolbar.Services
                         // Explicitly force our exact coordinates regardless of page state
                         try
                         {
-                            string jsSet = $"(function(){{var lat={latStr}; var lon={lonStr}; var newHash='#/'+lat.toFixed(6)+','+lon.toFixed(6)+',12/128/'; if (window.location.hash!==newHash) window.location.hash=newHash; try{{ window.dispatchEvent(new HashChangeEvent('hashchange')); }}catch(e){{}} try{{ var map=window.map||window.MAP||window.leafletMap; if(map&&map.setView) map.setView([lat,lon], map.getZoom?map.getZoom():12); }}catch(e){{}} }})();";
+                            string jsSet = $"(function(){{" +
+                                "try{{" +
+                                    "var lat={latStr}; var lon={lonStr};" +
+                                    "if (navigator && navigator.geolocation){{" +
+                                        "try{{" +
+                                            "navigator.geolocation.getCurrentPosition = function(succ, err){{ succ({{ coords: {{ latitude: lat, longitude: lon, accuracy: 10 }} }}); }};" +
+                                            "navigator.geolocation.watchPosition = function(succ, err){{ var id=setInterval(function(){{ succ({{ coords: {{ latitude: lat, longitude: lon, accuracy: 10 }} }}); }}, 5000); return id; }};" +
+                                            "navigator.geolocation.clearWatch = function(id){{ try{{ clearInterval(id); }}catch(_ ){{}} }};" +
+                                        "}}catch(_ ){{}}" +
+                                    "}}" +
+                                    "var apply=function(){{" +
+                                        "try{{ var nh = '#/'+lat.toFixed(4)+','+lon.toFixed(4)+',12/128/'; if (window.location.hash!==nh) window.location.hash=nh; try{{ window.dispatchEvent(new HashChangeEvent('hashchange')); }}catch(e){{}} }}" +
+                                        "try{{ var map=window.map||window.MAP||window.leafletMap; if(map&&map.setView) map.setView([lat,lon], map.getZoom?map.getZoom():12); }}catch(_ ){{}}" +
+                                    "}};" +
+                                    "apply();" +
+                                    "try{{ var t=0; var id=setInterval(function(){{ apply(); t+=1; if (t>12) clearInterval(id); }}, 500); }}catch(_ ){{}}" +
+                                "}}catch(_ ){{}}" +
+                            "}})();";
                             await web.CoreWebView2.ExecuteScriptAsync(jsSet);
                         }
                         catch {}
@@ -291,6 +391,16 @@ namespace WeatherToolbar.Services
                             }catch(e){}
                           })();";
                         await web.CoreWebView2.ExecuteScriptAsync(jsPurge);
+                        // Log final hash/coords for diagnostics
+                        try
+                        {
+                            string hash = await web.CoreWebView2.ExecuteScriptAsync("(function(){return window.location.hash||'';})()");
+                            if (WeatherToolbar.Services.ConfigService.IsLoggingEnabled()) {
+                                string dir = WeatherToolbar.Services.ConfigService.ConfigDir; System.IO.Directory.CreateDirectory(dir);
+                                System.IO.File.AppendAllText(System.IO.Path.Combine(dir, "app.log"), DateTime.Now.ToString("s") + $": Final hash: {hash}\n");
+                            }
+                        }
+                        catch {}
                     }
                     catch { }
 

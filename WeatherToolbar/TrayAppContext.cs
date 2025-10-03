@@ -1022,7 +1022,7 @@ namespace WeatherToolbar
             if (Math.Abs(_lat) < double.Epsilon && Math.Abs(_lon) < double.Epsilon)
                 return;
             // Meteograms with current coords
-            string url = $"https://meteograms.com/#/{_lat.ToString(System.Globalization.CultureInfo.InvariantCulture)},{_lon.ToString(System.Globalization.CultureInfo.InvariantCulture)},12/96/";
+            string url = $"https://meteograms.com/#/{_lat.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)},{_lon.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)},12/128/";
             try
             {
                 var psi = new System.Diagnostics.ProcessStartInfo
