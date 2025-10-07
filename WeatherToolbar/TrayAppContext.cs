@@ -708,7 +708,7 @@ namespace WeatherToolbar
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 2,
-                RowCount = 11,
+                RowCount = 12,
                 BackColor = Color.Black,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -732,7 +732,8 @@ namespace WeatherToolbar
 
             // Use the same glyphs as rendering by calling WeatherService.Glyph(code)
             AddRow(WeatherService.Glyph(0), "0 (jasno)");
-            AddRow(WeatherService.Glyph(1), "1–2 (polojasno)");
+            AddRow(WeatherService.Glyph(1), "1 (skoro jasno)");
+            AddRow(WeatherService.Glyph(2), "2 (oblačno)");
             AddRow(WeatherService.Glyph(3), "3 (zataženo)");
             AddRow(WeatherService.Glyph(45), "45–48 (mlha)");
             AddRow(WeatherService.Glyph(51), "51–67 (mrholení / mrznoucí déšť)");
@@ -790,7 +791,7 @@ namespace WeatherToolbar
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 2,
-                RowCount = 10,
+                RowCount = 11,
                 BackColor = Color.Black,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -804,13 +805,14 @@ namespace WeatherToolbar
                 var swatch = new Panel { BackColor = c, Width = 18, Height = 18, Margin = new Padding(4, 3, 10, 3) };
                 var lbl = new Label { Text = text, ForeColor = Color.White, AutoSize = true, Margin = new Padding(0, 4, 0, 2) };
                 panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                int r = panel.RowCount - 10 + panel.RowStyles.Count - 1; // computed row index as we add
+                int r = panel.RowStyles.Count - 1; // compute next row index dynamically
                 panel.Controls.Add(swatch, 0, r);
                 panel.Controls.Add(lbl, 1, r);
             }
 
             AddRow(Color.Orange, "0 (jasno)");
-            AddRow(Color.Goldenrod, "1–2 (polojasno)");
+            AddRow(Color.Goldenrod, "1 (skoro jasno)");
+            AddRow(Color.LightSteelBlue, "2 (oblačno)");
             AddRow(Color.SteelBlue, "3 (zataženo)");
             AddRow(Color.SlateGray, "45–48 (mlha)");
             AddRow(Color.DodgerBlue, "51–67 (mrholení/mrznoucí déšť)");
