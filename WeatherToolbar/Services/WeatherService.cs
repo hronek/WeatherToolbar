@@ -73,7 +73,8 @@ namespace WeatherToolbar.Services
         {
             // Minimal mapping based on Open-Meteo weather codes
             if (code == 0) return "Jasno";
-            if (code == 1 || code == 2) return "Polojasno";
+            if (code == 1) return "Skoro jasno";
+            if (code == 2) return "Oblačno";
             if (code == 3) return "Zataženo";
             if (code >= 45 && code <= 48) return "Mlha";
             if (code >= 51 && code <= 57) return "Mrholení";
@@ -89,7 +90,8 @@ namespace WeatherToolbar.Services
         public static string Glyph(int code)
         {
             if (code == 0) return "☀";         // Clear
-            if (code == 1 || code == 2) return "⛅"; // Partly cloudy
+            if (code == 1) return "🌤";        // Mainly clear
+            if (code == 2) return "⛅";        // Partly cloudy
             if (code == 3) return "☁";         // Cloudy
             if (code >= 45 && code <= 48) return "🌫"; // Fog
             if (code >= 51 && code <= 67) return "☔"; // Drizzle/Freezing rain
@@ -104,7 +106,8 @@ namespace WeatherToolbar.Services
         public static Color ColorFor(int code)
         {
             if (code == 0) return Color.Orange;
-            if (code == 1 || code == 2) return Color.Goldenrod;
+            if (code == 1) return Color.Goldenrod;
+            if (code == 2) return Color.LightSteelBlue;
             if (code == 3) return Color.SteelBlue;
             if (code >= 45 && code <= 48) return Color.SlateGray;
             if (code >= 51 && code <= 67) return Color.DodgerBlue;

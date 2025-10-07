@@ -131,7 +131,7 @@ namespace WeatherToolbar
             menu.Items.Add(miGlyph);
 
             // Refresh interval submenu
-            var intervalMenu = new ToolStripMenuItem("Interval obnovení");
+            var intervalMenu = new ToolStripMenuItem("Interval obnovení teploty");
             void ApplyRefreshMinutes(int minutes)
             {
                 try
@@ -165,6 +165,139 @@ namespace WeatherToolbar
             AddIntervalItem("1 h", 60);
             UpdateIntervalChecks();
             menu.Items.Add(intervalMenu);
+            
+            // Meteogram refresh interval submenu
+            var meteogramIntervalMenu = new ToolStripMenuItem("Interval obnovení meteogramu");
+            void ApplyMeteogramRefreshMinutes(int minutes)
+            {
+                try
+                {
+                    _config.MeteogramRefreshMinutes = minutes;
+                    ConfigService.Save(_config);
+                    var ms = Math.Max(1, minutes) * 60 * 1000;
+                    _meteogramTimer.Interval = ms;
+                    _meteogramTimer.Stop(); _meteogramTimer.Start();
+                }
+                catch { }
+            }
+            void UpdateMeteogramIntervalChecks()
+            {
+                foreach (ToolStripItem it in meteogramIntervalMenu.DropDownItems)
+                {
+                    if (it is ToolStripMenuItem mi && mi.Tag is int m)
+                        mi.Checked = (_config.MeteogramRefreshMinutes ?? 15) == m;
+                }
+            }
+            void AddMeteogramIntervalItem(string text, int minutes)
+            {
+                var mi = new ToolStripMenuItem(text) { CheckOnClick = false, Tag = minutes };
+                mi.Click += (_, __) => { ApplyMeteogramRefreshMinutes(minutes); UpdateMeteogramIntervalChecks(); };
+                meteogramIntervalMenu.DropDownItems.Add(mi);
+            }
+            AddMeteogramIntervalItem("15 min", 15);
+            AddMeteogramIntervalItem("30 min", 30);
+            AddMeteogramIntervalItem("1 h", 60);
+            UpdateMeteogramIntervalChecks();
+            menu.Items.Add(meteogramIntervalMenu);
+            
+            // Meteogram duration submenu
+            var meteogramDurationMenu = new ToolStripMenuItem("Délka meteogramu");
+            void ApplyMeteogramDuration(int hours)
+            {
+                try
+                {
+                    _config.MeteogramDurationHours = hours;
+                    ConfigService.Save(_config);
+                    // Force refresh meteogram with new duration
+                    try { _meteogramHasFresh = false; _meteogramLoading = true; var p = GetMeteogramPath(); if (System.IO.File.Exists(p)) System.IO.File.Delete(p); } catch {}
+                    _ = CaptureMeteogramIfPossibleAsync();
+                }
+                catch { }
+            }
+            void UpdateMeteogramDurationChecks()
+            {
+                foreach (ToolStripItem it in meteogramDurationMenu.DropDownItems)
+                {
+                    if (it is ToolStripMenuItem mi && mi.Tag is int h)
+                        mi.Checked = (_config.MeteogramDurationHours ?? 96) == h;
+                }
+            }
+            void AddMeteogramDurationItem(string text, int hours)
+            {
+                var mi = new ToolStripMenuItem(text) { CheckOnClick = false, Tag = hours };
+                mi.Click += (_, __) => { ApplyMeteogramDuration(hours); UpdateMeteogramDurationChecks(); };
+                meteogramDurationMenu.DropDownItems.Add(mi);
+            }
+            AddMeteogramDurationItem("24 h", 24);
+            AddMeteogramDurationItem("48 h", 48);
+            AddMeteogramDurationItem("72 h", 72);
+            AddMeteogramDurationItem("96 h", 96);
+            AddMeteogramDurationItem("128 h", 128);
+            UpdateMeteogramDurationChecks();
+            menu.Items.Add(meteogramDurationMenu);
+            
+            // Radar animation speed submenu
+            var radarSpeedMenu = new ToolStripMenuItem("Rychlost animace radaru");
+            void ApplyRadarSpeed(int speedMs)
+            {
+                try
+                {
+                    _config.RadarAnimationSpeed = speedMs;
+                    ConfigService.Save(_config);
+                }
+                catch { }
+            }
+            void UpdateRadarSpeedChecks()
+            {
+                foreach (ToolStripItem it in radarSpeedMenu.DropDownItems)
+                {
+                    if (it is ToolStripMenuItem mi && mi.Tag is int s)
+                        mi.Checked = (_config.RadarAnimationSpeed ?? 800) == s;
+                }
+            }
+            void AddRadarSpeedItem(string text, int speedMs)
+            {
+                var mi = new ToolStripMenuItem(text) { CheckOnClick = false, Tag = speedMs };
+                mi.Click += (_, __) => { ApplyRadarSpeed(speedMs); UpdateRadarSpeedChecks(); };
+                radarSpeedMenu.DropDownItems.Add(mi);
+            }
+            AddRadarSpeedItem("Velmi rychlá (300 ms)", 300);
+            AddRadarSpeedItem("Rychlá (500 ms)", 500);
+            AddRadarSpeedItem("Normální (800 ms)", 800);
+            AddRadarSpeedItem("Pomalá (1200 ms)", 1200);
+            AddRadarSpeedItem("Velmi pomalá (2000 ms)", 2000);
+            UpdateRadarSpeedChecks();
+            menu.Items.Add(radarSpeedMenu);
+            
+            // Radar theme submenu
+            var radarThemeMenu = new ToolStripMenuItem("Pozadí radaru");
+            void ApplyRadarTheme(bool isDark)
+            {
+                try
+                {
+                    _config.RadarDarkTheme = isDark;
+                    ConfigService.Save(_config);
+                }
+                catch { }
+            }
+            void UpdateRadarThemeChecks()
+            {
+                foreach (ToolStripItem it in radarThemeMenu.DropDownItems)
+                {
+                    if (it is ToolStripMenuItem mi && mi.Tag is bool dark)
+                        mi.Checked = (_config.RadarDarkTheme ?? true) == dark;
+                }
+            }
+            void AddRadarThemeItem(string text, bool isDark)
+            {
+                var mi = new ToolStripMenuItem(text) { CheckOnClick = false, Tag = isDark };
+                mi.Click += (_, __) => { ApplyRadarTheme(isDark); UpdateRadarThemeChecks(); };
+                radarThemeMenu.DropDownItems.Add(mi);
+            }
+            AddRadarThemeItem("Tmavé", true);
+            AddRadarThemeItem("Světlé", false);
+            UpdateRadarThemeChecks();
+            menu.Items.Add(radarThemeMenu);
             // Legend submenu (placed before penultimate radar link so radar remains penultimate)
             var legendMenu = new ToolStripMenuItem("Legenda");
             legendMenu.DropDownItems.Add("Ikona počasí", null, (_, __) => ShowIconsLegendOverlay());
@@ -274,8 +407,9 @@ namespace WeatherToolbar
                 catch (Exception ex) { Log("MouseDoubleClick preview error: " + ex.Message); }
             };
 
-            // Meteogram periodic capture every 15 minutes (only if WebView2 is available)
-            _meteogramTimer = new System.Windows.Forms.Timer { Interval = 15 * 60 * 1000 };
+            // Meteogram periodic capture (only if WebView2 is available)
+            int meteogramMinutes = _config.MeteogramRefreshMinutes.HasValue && _config.MeteogramRefreshMinutes.Value >= 1 ? _config.MeteogramRefreshMinutes.Value : 15;
+            _meteogramTimer = new System.Windows.Forms.Timer { Interval = meteogramMinutes * 60 * 1000 };
             _meteogramTimer.Tick += async (_, __) => { if (!_webView2Missing) await CaptureMeteogramIfPossibleAsync(); };
             _meteogramTimer.Start();
             _meteogramHasFresh = false; _meteogramLoading = true;
@@ -440,10 +574,11 @@ namespace WeatherToolbar
                     else return;
                 }
                 string path = GetMeteogramPath();
+                int duration = _config.MeteogramDurationHours ?? 96;
                 // Capture at 1200x560 for better clarity; preview will scale down
                 Log("CaptureMeteogram start");
                 _meteogramLoading = true; _meteogramHasFresh = false;
-                var ok = await MeteogramCaptureService.CaptureAsync(lat, lon, 1200, 560, path);
+                var ok = await MeteogramCaptureService.CaptureAsync(lat, lon, 1200, 560, path, duration);
                 Log("CaptureMeteogram done: " + ok);
                 _meteogramLoading = false; _meteogramHasFresh = ok && System.IO.File.Exists(path);
                 if (_meteogramHasFresh)
@@ -760,6 +895,8 @@ namespace WeatherToolbar
                 string latStr = lat.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 string lonStr = lon.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 int zoom = 8;
+                int animSpeed = _config.RadarAnimationSpeed ?? 800;
+                bool useDarkTheme = _config.RadarDarkTheme ?? true;
                 string html = $@"<!DOCTYPE html>
 <html>
 <head>
@@ -770,52 +907,203 @@ namespace WeatherToolbar
   <style>
     html,body,#map{{height:100%;margin:0;background:#000}}
     .leaflet-control-attribution{{display:none}}
-    #ts{{position:absolute;right:8px;bottom:8px;color:#fff;background:rgba(0,0,0,0.5);padding:4px 6px;border-radius:4px;font:12px/14px Segoe UI,Arial,sans-serif;z-index:1000}}
+    #ts{{position:absolute;right:8px;top:8px;color:#fff;background:rgba(0,0,0,0.7);padding:6px 10px;border-radius:4px;font:bold 13px/16px Segoe UI,Arial,sans-serif;z-index:1000}}
+    #slider-container{{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);width:80%;max-width:450px;background:rgba(0,0,0,0.7);padding:10px 15px;border-radius:6px;z-index:1000}}
+    #slider{{width:100%;height:6px;-webkit-appearance:none;appearance:none;background:#444;outline:none;border-radius:3px;cursor:pointer;margin-bottom:6px}}
+    #slider::-webkit-slider-thumb{{-webkit-appearance:none;appearance:none;width:16px;height:16px;background:#00aaff;border-radius:50%;cursor:pointer}}
+    #slider::-moz-range-thumb{{width:16px;height:16px;background:#00aaff;border:none;border-radius:50%;cursor:pointer}}
+    #time-labels{{display:flex;justify-content:space-between;font:10px Segoe UI,Arial,sans-serif;color:#aaa;margin-bottom:8px}}
+    #controls{{display:flex;justify-content:center;gap:8px;margin-top:4px}}
+    #play-pause{{background:#00aaff;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font:bold 11px Segoe UI,Arial,sans-serif}}
+    #play-pause:hover{{background:#0088cc}}
+    #theme-toggle{{background:#555;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font:bold 11px Segoe UI,Arial,sans-serif}}
+    #theme-toggle:hover{{background:#666}}
   </style>
   <script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>
-  <script>const LAT={latStr}, LON={lonStr}, Z={zoom};</script>
+  <script>const LAT={latStr}, LON={lonStr}, Z={zoom}, ANIM_SPEED={animSpeed}, USE_DARK_THEME={useDarkTheme.ToString().ToLower()};</script>
 </head>
 <body>
   <div id='map'></div>
   <div id='ts'>--:--</div>
+  <div id='slider-container'>
+    <input type='range' id='slider' min='0' max='0' value='0' step='1'>
+    <div id='time-labels'></div>
+    <div id='controls'>
+      <button id='play-pause'>⏸</button>
+      <button id='theme-toggle'>🌙</button>
+    </div>
+  </div>
   <script>
     const map = L.map('map', {{ zoomControl:false }}).setView([LAT, LON], Z);
-    // Dark basemap
-    L.tileLayer('https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png', {{ subdomains:['a','b','c','d'], maxZoom: 14 }}).addTo(map);
-    // Scale control (metric only)
+    
+    // Basemap layers
+    const darkBase = L.tileLayer('https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png', {{ subdomains:['a','b','c','d'], maxZoom: 14 }});
+    const lightBase = L.tileLayer('https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png', {{ subdomains:['a','b','c','d'], maxZoom: 14 }});
+    
+    // Start with configured theme
+    let isDarkTheme = USE_DARK_THEME;
+    if(isDarkTheme){{
+      darkBase.addTo(map);
+    }} else {{
+      lightBase.addTo(map);
+    }}
+    
     L.control.scale({{imperial:false, position:'bottomleft'}}).addTo(map);
-    // marker of current position
-    L.circleMarker([LAT, LON], {{ radius:5, color:'#fff', weight:2, fillColor:'#00aaff', fillOpacity:0.9 }}).addTo(map);
-    // Load RainViewer frames JSON (radar past + nowcast)
+    const markerColor = isDarkTheme ? '#fff' : '#000';
+    const marker = L.circleMarker([LAT, LON], {{ radius:5, color:markerColor, weight:2, fillColor:'#00aaff', fillOpacity:0.9 }}).addTo(map);
+    
+    let frames = [], layers = [], idx = 0, playing = true, animInterval = null;
+    const slider = document.getElementById('slider');
+    const playPauseBtn = document.getElementById('play-pause');
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    
+    // Set initial theme button state
+    themeToggleBtn.textContent = isDarkTheme ? '🌙' : '☀️';
+    themeToggleBtn.title = isDarkTheme ? 'Přepnout na světlý režim' : 'Přepnout na tmavý režim';
+    
+    function urlFor(t){{ return `https://tilecache.rainviewer.com/v2/radar/${{t}}/256/{{z}}/{{x}}/{{y}}/2/1_1.png`; }}
+    
+    function updateTimestamp(i){{
+      try{{
+        const t = frames[i].time || frames[i];
+        const dt = new Date(t*1000);
+        const hh = dt.getHours().toString().padStart(2,'0');
+        const mm = dt.getMinutes().toString().padStart(2,'0');
+        document.getElementById('ts').textContent = hh+':'+mm;
+      }}catch(e){{}}
+    }}
+    
+    function show(i){{
+      if(i<0 || i>=frames.length) return;
+      const t = frames[i].time || frames[i];
+      
+      // Add new layer with fade-in
+      const newLayer = L.tileLayer(urlFor(t), {{ opacity:0.0, zIndex: 400 + layers.length }}).addTo(map);
+      layers.push(newLayer);
+      
+      // Smooth cross-fade: fade in new layer while fading out old ones
+      let op = 0.0;
+      const fadeSteps = 15;
+      const fadeInterval = 30;
+      let step = 0;
+      
+      const crossFade = setInterval(()=>{{
+        step++;
+        op = step / fadeSteps;
+        
+        // Fade in new layer
+        newLayer.setOpacity(Math.min(0.95, op));
+        
+        // Fade out old layers
+        if(layers.length > 1){{
+          for(let j = 0; j < layers.length - 1; j++){{
+            layers[j].setOpacity(Math.max(0, 0.95 * (1 - op)));
+          }}
+        }}
+        
+        if(step >= fadeSteps){{
+          clearInterval(crossFade);
+          // Remove old layers after fade completes
+          while(layers.length > 1){{
+            const old = layers.shift();
+            map.removeLayer(old);
+          }}
+        }}
+      }}, fadeInterval);
+      
+      updateTimestamp(i);
+      slider.value = i;
+    }}
+    
+    function startAnimation(){{
+      if(animInterval) clearInterval(animInterval);
+      animInterval = setInterval(()=>{{
+        idx = idx + 1;
+        if(idx >= frames.length){{
+          // Pause for 2 seconds at the end before restarting
+          stopAnimation();
+          setTimeout(()=>{{
+            if(playing){{
+              idx = 0;
+              show(idx);
+              startAnimation();
+            }}
+          }}, 2000);
+        }} else {{
+          show(idx);
+        }}
+      }}, ANIM_SPEED);
+    }}
+    
+    function stopAnimation(){{
+      if(animInterval) clearInterval(animInterval);
+      animInterval = null;
+    }}
+    
+    playPauseBtn.addEventListener('click', ()=>{{
+      playing = !playing;
+      playPauseBtn.textContent = playing ? '⏸' : '▶';
+      if(playing) startAnimation(); else stopAnimation();
+    }});
+    
+    themeToggleBtn.addEventListener('click', ()=>{{
+      isDarkTheme = !isDarkTheme;
+      
+      if(isDarkTheme){{
+        // Switch to dark theme
+        map.removeLayer(lightBase);
+        darkBase.addTo(map);
+        marker.setStyle({{ color:'#fff', weight:2 }});
+        themeToggleBtn.textContent = '🌙';
+        themeToggleBtn.title = 'Přepnout na světlý režim';
+      }} else {{
+        // Switch to light theme
+        map.removeLayer(darkBase);
+        lightBase.addTo(map);
+        marker.setStyle({{ color:'#000', weight:2 }});
+        themeToggleBtn.textContent = '☀️';
+        themeToggleBtn.title = 'Přepnout na tmavý režim';
+      }}
+    }});
+    
+    slider.addEventListener('input', (e)=>{{
+      stopAnimation();
+      playing = false;
+      playPauseBtn.textContent = '▶';
+      idx = parseInt(e.target.value);
+      show(idx);
+    }});
+    
+    function generateTimeLabels(){{
+      const labelsDiv = document.getElementById('time-labels');
+      labelsDiv.innerHTML = '';
+      if(frames.length === 0) return;
+      
+      // Show first, middle, and last timestamp
+      const indices = [0, Math.floor(frames.length / 2), frames.length - 1];
+      indices.forEach(i => {{
+        const t = frames[i].time || frames[i];
+        const dt = new Date(t * 1000);
+        const hh = dt.getHours().toString().padStart(2, '0');
+        const mm = dt.getMinutes().toString().padStart(2, '0');
+        const span = document.createElement('span');
+        span.textContent = hh + ':' + mm;
+        labelsDiv.appendChild(span);
+      }});
+    }}
+    
     fetch('https://api.rainviewer.com/public/weather-maps.json').then(r=>r.json()).then(data=>{{
       const past = (data.radar && data.radar.past) ? data.radar.past : [];
-      const nowc = (data.radar && data.radar.nowcast) ? data.radar.nowcast : [];
-      const all = past.concat(nowc);
-      const cutoff = Date.now()/1000 - 3600; // last 60 minutes
-      let frames = all.filter(f=>f.time>=cutoff);
+      // Only use past data (no nowcast/prediction)
+      const cutoff = Date.now()/1000 - 3600;
+      frames = past.filter(f=>f.time>=cutoff);
       if(frames.length===0) frames = past.slice(-4);
-      if(frames.length===0) return; // nothing to show
-      const layers = [];
-      let idx = 0;
-      function urlFor(t){{ return `https://tilecache.rainviewer.com/v2/radar/${{t}}/256/{{z}}/{{x}}/{{y}}/2/1_1.png`; }}
-      function show(i){{
-        const t = frames[i].time || frames[i];
-        const layer = L.tileLayer(urlFor(t), {{ opacity:0.0, zIndex: 400 }}).addTo(map);
-        layers.push(layer);
-        let op = 0.0;
-        const fad = setInterval(()=>{{ op+=0.2; layer.setOpacity(Math.min(0.95,op)); if(op>=0.95) clearInterval(fad); }}, 40);
-        // remove previous layer after fade-in
-        if (layers.length>2) {{ const old = layers.shift(); map.removeLayer(old); }}
-        // update timestamp label (local time HH:MM)
-        try{{
-          var dt = new Date(t*1000);
-          var hh = dt.getHours().toString().padStart(2,'0');
-          var mm = dt.getMinutes().toString().padStart(2,'0');
-          document.getElementById('ts').textContent = hh+':'+mm;
-        }}catch(e){{}}
-      }}
+      if(frames.length===0) return;
+      
+      slider.max = frames.length - 1;
+      generateTimeLabels();
       show(0);
-      setInterval(()=>{{ idx=(idx+1)%frames.length; show(idx); }}, 500);
+      startAnimation();
     }}).catch(()=>{{}});
   </script>
 </body>
@@ -1027,7 +1315,8 @@ namespace WeatherToolbar
             if (Math.Abs(_lat) < double.Epsilon && Math.Abs(_lon) < double.Epsilon)
                 return;
             // Meteograms with current coords
-            string url = $"https://meteograms.com/#/{_lat.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)},{_lon.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)},12/128/";
+            int duration = _config.MeteogramDurationHours ?? 96;
+            string url = $"https://meteograms.com/#/{_lat.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)},{_lon.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)},12/{duration}/";
             try
             {
                 var psi = new System.Diagnostics.ProcessStartInfo

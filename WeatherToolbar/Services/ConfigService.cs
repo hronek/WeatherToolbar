@@ -10,6 +10,10 @@ namespace WeatherToolbar.Services
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
         public int? RefreshMinutes { get; set; }
+        public int? MeteogramRefreshMinutes { get; set; }
+        public int? MeteogramDurationHours { get; set; }
+        public int? RadarAnimationSpeed { get; set; }
+        public bool? RadarDarkTheme { get; set; }
         public string City { get; set; }
         public string Country { get; set; }
         public string FontFamily { get; set; }
@@ -38,6 +42,10 @@ namespace WeatherToolbar.Services
                         City = "Písek",
                         Country = "Česko",
                         RefreshMinutes = 1,
+                        MeteogramRefreshMinutes = 15,
+                        MeteogramDurationHours = 96,
+                        RadarAnimationSpeed = 800,
+                        RadarDarkTheme = true,
                         ShowGlyph = true,
                         FontSize = 16,
                         OutlineRadius = 1,
@@ -63,6 +71,26 @@ namespace WeatherToolbar.Services
                 if (!cfg.EnableLogging.HasValue)
                 {
                     cfg.EnableLogging = false;
+                    Save(cfg);
+                }
+                if (!cfg.MeteogramRefreshMinutes.HasValue)
+                {
+                    cfg.MeteogramRefreshMinutes = 15;
+                    Save(cfg);
+                }
+                if (!cfg.MeteogramDurationHours.HasValue)
+                {
+                    cfg.MeteogramDurationHours = 96;
+                    Save(cfg);
+                }
+                if (!cfg.RadarAnimationSpeed.HasValue)
+                {
+                    cfg.RadarAnimationSpeed = 800;
+                    Save(cfg);
+                }
+                if (!cfg.RadarDarkTheme.HasValue)
+                {
+                    cfg.RadarDarkTheme = true;
                     Save(cfg);
                 }
                 return cfg;

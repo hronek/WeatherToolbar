@@ -10,7 +10,7 @@ namespace WeatherToolbar.Services
 {
     public static class MeteogramCaptureService
     {
-        public static async Task<bool> CaptureAsync(double lat, double lon, int width, int height, string outPath)
+        public static async Task<bool> CaptureAsync(double lat, double lon, int width, int height, string outPath, int durationHours = 96)
         {
             try
             {
@@ -122,8 +122,8 @@ namespace WeatherToolbar.Services
                 // Navigate to meteograms URL
                 string latStr = lat.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
                 string lonStr = lon.ToString("F4", System.Globalization.CultureInfo.InvariantCulture);
-                string url = $"https://meteograms.com/#/{latStr},{lonStr},12/128/";
-                string targetHash = $"#/{latStr},{lonStr},12/128/";
+                string url = $"https://meteograms.com/#/{latStr},{lonStr},12/{durationHours}/";
+                string targetHash = $"#/{latStr},{lonStr},12/{durationHours}/";
                 try {
                     if (WeatherToolbar.Services.ConfigService.IsLoggingEnabled()) {
                         string dir = WeatherToolbar.Services.ConfigService.ConfigDir; System.IO.Directory.CreateDirectory(dir);
@@ -315,7 +315,7 @@ namespace WeatherToolbar.Services
                               var m = h.match(/#\/(.*?),(.*?),/);
                               if (m && m[1] && m[2]){
                                 var lat = parseFloat(m[1]); var lon = parseFloat(m[2]);
-                                var newHash = '#/' + lat.toFixed(4) + ',' + lon.toFixed(4) + ',12/128/';
+                                var newHash = '#/' + lat.toFixed(4) + ',' + lon.toFixed(4) + ',12/DURATION_PLACEHOLDER/';
                                 if (window.location.hash !== newHash){ window.location.hash = newHash; }
                                 try{ window.dispatchEvent(new HashChangeEvent('hashchange')); }catch(e){}
                                 try{ var map = window.map || window.MAP || window.leafletMap; if (map && map.setView) map.setView([lat,lon], map.getZoom()); }catch(e){}
@@ -352,7 +352,7 @@ namespace WeatherToolbar.Services
                               document.documentElement.appendChild(style);
                             } catch(e) {}
                             return 'done';
-                          })();";
+                          })();".Replace("DURATION_PLACEHOLDER", durationHours.ToString());
                         for (int i = 0; i < 18; i++)
                         {
                             await web.CoreWebView2.ExecuteScriptAsync(jsTry);
@@ -363,7 +363,7 @@ namespace WeatherToolbar.Services
                         {
                             string jsSet = $"(function(){{" +
                                 "try{{" +
-                                    "var lat={latStr}; var lon={lonStr};" +
+                                    "var lat={latStr}; var lon={lonStr}; var dur={durationHours};" +
                                     "if (navigator && navigator.geolocation){{" +
                                         "try{{" +
                                             "navigator.geolocation.getCurrentPosition = function(succ, err){{ succ({{ coords: {{ latitude: lat, longitude: lon, accuracy: 10 }} }}); }};" +
@@ -372,7 +372,7 @@ namespace WeatherToolbar.Services
                                         "}}catch(_ ){{}}" +
                                     "}}" +
                                     "var apply=function(){{" +
-                                        "try{{ var nh = '#/'+lat.toFixed(4)+','+lon.toFixed(4)+',12/128/'; if (window.location.hash!==nh) window.location.hash=nh; try{{ window.dispatchEvent(new HashChangeEvent('hashchange')); }}catch(e){{}} }}" +
+                                        "try{{ var nh = '#/'+lat.toFixed(4)+','+lon.toFixed(4)+',12/'+dur+'/'; if (window.location.hash!==nh) window.location.hash=nh; try{{ window.dispatchEvent(new HashChangeEvent('hashchange')); }}catch(e){{}} }}" +
                                         "try{{ var map=window.map||window.MAP||window.leafletMap; if(map&&map.setView) map.setView([lat,lon], map.getZoom?map.getZoom():12); }}catch(_ ){{}}" +
                                     "}};" +
                                     "apply();" +
