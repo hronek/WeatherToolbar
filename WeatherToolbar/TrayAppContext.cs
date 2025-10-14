@@ -867,7 +867,22 @@ namespace WeatherToolbar
             _radarWeb = new Microsoft.Web.WebView2.WinForms.WebView2 { Dock = DockStyle.Fill, DefaultBackgroundColor = Color.Black, TabStop = true };
             _radarWeb.PreviewKeyDown += (s, e) => { if (e.KeyCode == Keys.Escape) { try { _radarForm.Hide(); MarkJustClosedOverlay(); } catch { } } };
             _radarForm.Controls.Add(_radarWeb);
-            await _radarWeb.EnsureCoreWebView2Async();
+            // Initialize WebView2 with explicit environment so UserDataFolder is in AppData (not next to EXE)
+            try
+            {
+                string userData = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WeatherToolbar", "WebView2");
+                System.IO.Directory.CreateDirectory(userData);
+                var opts = new CoreWebView2EnvironmentOptions();
+                // Limit disk cache to ~30 MB and keep media cache tiny
+                opts.AdditionalBrowserArguments = "--disk-cache-size=31457280 --media-cache-size=1048576";
+                var env = await CoreWebView2Environment.CreateAsync(browserExecutableFolder: null, userDataFolder: userData, options: opts);
+                await _radarWeb.EnsureCoreWebView2Async(env);
+            }
+            catch
+            {
+                // Fallback
+                await _radarWeb.EnsureCoreWebView2Async();
+            }
             // Inject JS to forward Esc from the web content to host via postMessage
             try
             {

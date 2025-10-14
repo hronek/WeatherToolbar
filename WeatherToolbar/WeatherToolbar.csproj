@@ -9,6 +9,10 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <AssemblyName>WeatherToolbar</AssemblyName>
     <RootNamespace>WeatherToolbar</RootNamespace>
+    <!-- Konfigurace pro použití systémového WebView2 runtime -->
+    <WebView2UseWebView2Sdk>true</WebView2UseWebView2Sdk>
+    <WebView2UseRuntime>true</WebView2UseRuntime>
+    <WebView2UseFixedRuntime>false</WebView2UseFixedRuntime>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2739.15" />

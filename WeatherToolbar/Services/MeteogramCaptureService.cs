@@ -33,8 +33,14 @@ namespace WeatherToolbar.Services
                 };
                 form.Controls.Add(web);
 
-                // Initialize WebView2
-                await web.EnsureCoreWebView2Async();
+                // Initialize WebView2 with explicit environment so UserDataFolder is in AppData (not next to EXE)
+                string userData = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WeatherToolbar", "WebView2");
+                Directory.CreateDirectory(userData);
+                var opts = new CoreWebView2EnvironmentOptions();
+                // Limit disk cache to ~30 MB and keep media cache tiny
+                opts.AdditionalBrowserArguments = "--disk-cache-size=31457280 --media-cache-size=1048576";
+                var env = await CoreWebView2Environment.CreateAsync(browserExecutableFolder: null, userDataFolder: userData, options: opts);
+                await web.EnsureCoreWebView2Async(env);
                 web.CoreWebView2.Settings.IsStatusBarEnabled = false;
                 web.CoreWebView2.Settings.IsZoomControlEnabled = false;
                 web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
